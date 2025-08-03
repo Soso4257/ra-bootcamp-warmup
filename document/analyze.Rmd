@@ -1,0 +1,162 @@
+---
+title: "事前課題I-1"
+output: html_document
+date: "2025-08-03"
+---
+
+```{r setup, include=FALSE}
+# 最初にライブラリを読み込みます
+library(tidyverse)
+library(here)
+
+# 次に、各種設定を行います
+knitr::opts_chunk$set(echo = TRUE)
+
+# 最後に、ライブラリ内の関数を使って日本語フォント設定をします
+theme_set(theme_gray(base_family = "HiraginoSans-W3"))
+```
+
+```{r load-data}
+# クリーニング済みのデータを読み込む
+df_final <- readRDS(here("data", "cleaned", "cleaned_absence_data.rds"))
+```
+
+```{r summary-table-plot}
+# 1. 年度別に合計不登校者数を集計する
+df_summary <- df_final %>%
+  group_by(year) %>%
+  summarise(
+    total_truants = sum(n_truants, na.rm = TRUE)
+  )
+
+# 2. 集計結果の表を表示する
+df_summary
+
+# 3. 棒グラフを作成する
+ggplot(data = df_summary, aes(x = year, y = total_truants / 10000)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "不登校生徒数の推移",
+    x = "年度",
+    y = "不登校生徒数(万人)"
+  )
+```
+
+```{r rate-trend-plot}
+# 1. 全国の年度別不登校割合を計算
+df_rate_summary <- df_final %>%
+  group_by(year) %>%
+  summarise(
+    # 全国の不登校者数と生徒数を合計
+    total_truants = sum(n_truants, na.rm = TRUE),
+    total_students = sum(n_students, na.rm = TRUE)
+  ) %>%
+  # 全国の不登校割合を計算
+  mutate(national_rate_percent = (total_truants / total_students) * 100)
+
+# 2. 折れ線グラフを作成
+ggplot(data = df_rate_summary, aes(x = year, y = national_rate_percent)) +
+  geom_line() +  # 折れ線グラフを追加
+  geom_point() + # 各年の点を追加
+  # 各点の上に割合の数値を表示
+  geom_text(
+    aes(label = round(national_rate_percent, 1)),
+    vjust = -1.5 # 文字を点の上側に少しずらす
+  ) +
+  labs(
+    title = "不登校生徒割合の推移",
+    x = "年度",
+    y = "不登校割合 (%)"
+  ) +
+  # Y軸の範囲を調整して、上のラベルが見えるようにする
+  ylim(0, 10)
+```
+
+
+```{r dual-axis-plot-fixed}
+# 1. 全国の年度別不登校割合を計算（グラフに必要なデータを準備）
+df_rate_summary <- df_final %>%
+  group_by(year) %>%
+  summarise(
+    total_truants = sum(n_truants, na.rm = TRUE),
+    total_students = sum(n_students, na.rm = TRUE)
+  ) %>%
+  mutate(national_rate_percent = (total_truants / total_students) * 100)
+
+# 2. 2軸グラフのための調整係数を計算
+scaling_factor <- max(df_rate_summary$total_truants / 10000) / max(df_rate_summary$national_rate_percent)
+
+# 3. 2軸グラフを作成
+ggplot(data = df_rate_summary, aes(x = year)) +
+  geom_bar(
+    aes(y = total_truants / 10000), 
+    stat = "identity", 
+    fill = "skyblue", 
+    alpha = 0.7
+  ) +
+  geom_line(
+    aes(y = national_rate_percent * scaling_factor),
+    color = "darkred", 
+    linewidth = 1
+  ) +
+  scale_y_continuous(
+    name = "不登校生徒数(万人)",
+    sec.axis = sec_axis(
+      transform = ~ . / scaling_factor, 
+      name = "不登校割合(%)"
+    )
+  ) +
+  labs(
+    title = "不登校生徒数と割合の推移",
+    x = "年度",
+    y = ""
+  )
+```
+
+```{r histogram-2022}
+# 1. 2022年のデータだけに絞り込む
+df_2022 <- df_final %>%
+  filter(year == 2022)
+
+# 2. ヒストグラムを作成
+ggplot(data = df_2022, aes(x = truancy_rate)) +
+  # ヒストグラムを追加（binwidthで棒の幅を調整）
+  geom_histogram(binwidth = 0.5, fill = "gray", color = "black") +
+  # 平均値の場所に破線を追加
+  geom_vline(
+    aes(xintercept = mean(truancy_rate, na.rm = TRUE)),
+    color = "red",
+    linetype = "dashed",
+    linewidth = 1
+  ) +
+  labs(
+    title = "不登校割合の分布 (2022年度)",
+    x = "不登校割合 (%)",
+    y = "都道府県数"
+  )
+```
+
+```{r sorted-bar-chart}
+# 1. データを準備
+df_2022_sorted <- df_2022 %>%
+  # 不登校割合に応じて都道府県の順序を並び替える
+  mutate(prefecture = fct_reorder(prefecture, truancy_rate)) %>%
+  # 強調表示するための列を追加（ここで好きな都道府県を指定）
+  mutate(highlight_flag = ifelse(prefecture == "大分", "highlight", "normal"))
+
+# 2. 棒グラフを作成
+ggplot(data = df_2022_sorted, aes(x = prefecture, y = truancy_rate, fill = highlight_flag)) +
+  geom_col() + # geom_bar(stat="identity")と同じ
+  # グラフを水平にする
+  coord_flip() +
+  # 色を直接指定する
+  scale_fill_manual(
+    values = c("highlight" = "pink", "normal" = "gray"),
+    guide = "none" # 凡例を非表示にする
+  ) +
+  labs(
+    title = "都道府県別不登校割合 (2022年度)",
+    x = "", # X軸のラベルは不要なため空に
+    y = "不登校割合 (%)"
+  )
+```
