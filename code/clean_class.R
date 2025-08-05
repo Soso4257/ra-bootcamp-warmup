@@ -74,3 +74,5 @@ df_final_class <- df_calculated %>%
 
 # 5. 完成したデータをdata/cleanedフォルダに保存
 saveRDS(df_final_class, file = here("data", "cleaned", "cleaned_class_data.rds"))
+
+#多分、どこか間違ってる。
